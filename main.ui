@@ -358,7 +358,7 @@
   <action name="actionClear_2">
    <property name="icon">
     <iconset>
-     <normalon>1.svg</normalon>
+     <normalon>C:/Users/Ruuz/.designer/backup/1.svg</normalon>
     </iconset>
    </property>
    <property name="text">
@@ -366,8 +366,6 @@
    </property>
   </action>
  </widget>
- <resources>
-  <include location="1.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>
