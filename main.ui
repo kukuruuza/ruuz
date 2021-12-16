@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>833</width>
+    <width>1080</width>
     <height>654</height>
    </rect>
   </property>
@@ -35,9 +35,12 @@
      </widget>
     </item>
     <item>
+     <widget class="QTextEdit" name="textEdit"/>
+    </item>
+    <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_modes">
        <attribute name="title">
@@ -121,8 +124,8 @@
        <widget class="QLabel" name="lblMode">
         <property name="geometry">
          <rect>
-          <x>130</x>
-          <y>250</y>
+          <x>20</x>
+          <y>330</y>
           <width>111</width>
           <height>31</height>
          </rect>
@@ -136,6 +139,96 @@
          <string>Mode</string>
         </property>
        </widget>
+       <widget class="QPushButton" name="btnJP">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>40</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Joint Print</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnResetRead1">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>70</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Reset Read1</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnResetRead2">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>100</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Reset Read2</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnDownload">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>130</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Download</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnCalcOffset">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>170</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Calc OFFSET</string>
+        </property>
+       </widget>
+       <widget class="QListWidget" name="listWidget_offsets">
+        <property name="geometry">
+         <rect>
+          <x>220</x>
+          <y>170</y>
+          <width>101</width>
+          <height>171</height>
+         </rect>
+        </property>
+       </widget>
       </widget>
       <widget class="QWidget" name="tab_axis">
        <attribute name="title">
@@ -146,7 +239,7 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -209,7 +302,7 @@
          <rect>
           <x>0</x>
           <y>80</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -272,7 +365,7 @@
          <rect>
           <x>0</x>
           <y>160</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -335,7 +428,7 @@
          <rect>
           <x>0</x>
           <y>240</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -398,7 +491,7 @@
          <rect>
           <x>0</x>
           <y>320</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -461,7 +554,7 @@
          <rect>
           <x>0</x>
           <y>400</y>
-          <width>299</width>
+          <width>331</width>
           <height>82</height>
          </rect>
         </property>
@@ -522,7 +615,7 @@
       </widget>
       <widget class="QWidget" name="tab_port">
        <attribute name="title">
-        <string>Port</string>
+        <string>Settings</string>
        </attribute>
        <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
@@ -653,7 +746,7 @@
        <widget class="QPushButton" name="btnINI">
         <property name="geometry">
          <rect>
-          <x>300</x>
+          <x>260</x>
           <y>250</y>
           <width>75</width>
           <height>23</height>
@@ -668,7 +761,7 @@
          <rect>
           <x>10</x>
           <y>230</y>
-          <width>361</width>
+          <width>320</width>
           <height>20</height>
          </rect>
         </property>
@@ -678,7 +771,7 @@
          <rect>
           <x>10</x>
           <y>290</y>
-          <width>361</width>
+          <width>320</width>
           <height>20</height>
          </rect>
         </property>
@@ -686,7 +779,7 @@
        <widget class="QPushButton" name="btnCFG">
         <property name="geometry">
          <rect>
-          <x>300</x>
+          <x>260</x>
           <y>310</y>
           <width>75</width>
           <height>23</height>
@@ -706,7 +799,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>833</width>
+     <width>1080</width>
      <height>21</height>
     </rect>
    </property>
