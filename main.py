@@ -1,4 +1,5 @@
 import sys
+import os
 import sqlite3
 from PyQt5 import uic, QtCore
 from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
@@ -7,7 +8,12 @@ from datetime import datetime
 from loguru import logger
 import os.path
 
-# TODO: проверка ком-порта
+# TODO: проверка ком-порта (не помню)
+# TODO: отправка в BIN HEX DEC
+# TODO: режим работы актуальный видно всегда (PRND)
+# TODO: скорость (0-100 и фиксированные значения)
+# TODO: J1-6 отображение положения (мин-макс и "плпавющий" режим)
+
 
 logger.add("main.log", format="{time} {level} {message}", level="DEBUG")
 
@@ -28,7 +34,8 @@ class robot_form(QMainWindow):
         self.text_Reset_Read = ""
         self.mode_joint_print = 0
         self.text_joint_print = ""
-        self.g09_offset = [0] * 6
+        self.offset_old = [0] * 6 # оффсеты из настроек ини-файла
+        self.calc_offset = [0] * 6 # оффсеты вычисляем
         self.reset_file_name = "reset parameter.txt"
         self.mode_download = 0
 
@@ -166,10 +173,22 @@ class robot_form(QMainWindow):
         self.form.btnResetRead1.clicked.connect(lambda: self.reset_read1())
         self.form.btnResetRead2.clicked.connect(lambda: self.reset_read2())
         # кнопка Calc Offset
-        self.form.btnCalcOffset.clicked.connect(lambda: self.calc_offset())
+        self.form.btnCalcOffset.clicked.connect(lambda: self.calc_new_offset())
+
+        # кнопка Prepare
+        self.form.btnPrepare.clicked.connect(lambda: self.proc_prepare())
 
         # кнопка Download
         self.form.btnDownload.clicked.connect(lambda: self.proc_download())
+
+        # кнопка Read_JP
+        self.form.btnReadJP.clicked.connect(lambda: self.read_JP())
+
+        # кнопка Read_Offsets
+        self.form.btnRead_Offsets.clicked.connect(lambda: self.read_offsets())
+
+        # кнопка Calc_Size
+        self.form.btnCalc_Size.clicked.connect(lambda: self.calc_size("tmp.txt"))
 
         # кнопка Browse INI
         self.form.btnINI.clicked.connect(lambda: self.choose_ini_file())
@@ -177,7 +196,7 @@ class robot_form(QMainWindow):
         self.form.btnCFG.clicked.connect(lambda: self.choose_cfg_file())
 
     @logger.catch
-    def calc_offset(self):
+    def calc_new_offset(self):
         # try:
         #     self.file_reset_parameter.close()
         # except:
@@ -185,11 +204,11 @@ class robot_form(QMainWindow):
         # разбор self.text_joint_print
         if self.text_joint_print == "":
             logger.error("Нарушена последовательность вызовов, нет координат (joint print)")
+        # elif self.offset_old == [0] * 6:
+        #     logger.error("Нарушена последовательность вызовов, нет значение оффсетов")
         else:
             self.form.listWidget_offsets.clear()
-            # parsing = {x[0]: x[1] for x in [y.split("=") for y in self.text_joint_print.split(" ") if len(y)]}
             y = self.text_joint_print.split(" ")
-            # for y in self.text_joint_print.split(" "):
             for i in range(0, 6):
                 logger.debug("self.text_joint_print_parsing1: " + str(y[i]))
                 x = y[i].split("=")
@@ -199,50 +218,118 @@ class robot_form(QMainWindow):
                 else:
                     max = 0
                 logger.debug("max: " + str(max))
-                offset = max - float(x[1]) - self.g09_offset[i]
-                self.form.listWidget_offsets.addItem("OFFSET" + str(i+1) + " = " + str(offset))
+                self.calc_offset[i] = round(max - float(x[1]) + self.offset_old[i], 4)
+                self.form.listWidget_offsets.addItem("OFFSET" + str(i+1) + " = " + str(self.calc_offset[i]))
+
+
+    @logger.catch
+    def proc_prepare(self):
+        lcFile = open(self.reset_file_name, "w+")
+        lcFile.write(self.form.textEdit.toPlainText())
+        lcFile.close()  # закрыли, чтоб сохранить
+
+
+    @logger.catch
+    # для работы, когда нет подключения к роботу - считываем строку self.text_joint_print из textEdit
+    def read_JP(self):
+        self.text_joint_print = self.form.textEdit.toPlainText()
+        logger.debug("self.text_joint_print = " + self.text_joint_print)
+
+    @logger.catch
+    # для работы, когда нет подключения к роботу - из textEdit готовим массив self.calc_offset
+    def read_offsets(self):
+        lcText = self.form.textEdit.toPlainText().split('\n')
+        for i in range(len(lcText)):
+            lcTmp = lcText[i]
+            if lcTmp.find("G09 ENC OFFSET") == 0:
+                j = int(lcTmp[14:15]) - 1
+                self.offset_old[j] = round(float(lcTmp[16:]), 4)  # сохраняем оффсеты в массив self.offset_old
+                logger.info("offset_old[" + str(j) + "]: " + str(self.offset_old[j]))
+
+    @logger.catch
+    # вычисление размера в байтах содержимого TextEdit
+    def calc_size(self, lcFileName):
+        lcText = self.form.textEdit.toPlainText().split('\n')
+        lcFile = open(lcFileName, "w+")
+        for i in range(len(lcText)):
+            if i < len(lcText)-1:
+                lcFile.write(lcText[i] + "\n")
+            else:
+                lcFile.write(lcText[i])
+        lcFile.close()  # закрыли, чтоб сохранить
+        lnSize = os.stat(lcFileName).st_size
+        self.form.lblSize.setText(str(lnSize))
 
 
     @logger.catch
     def proc_download(self):
         self.mode_download = 1
-        lcFile = open(self.reset_file_name, "w+")
-        lcText = self.form.textEdit.toPlainText()
-        lnSize = len(lcText)
-        lcFile.write(lcText)
-        lcFile.close() # закрыли, чтоб сохранить
-        # self.change_mode(2) # 11H
-        lcFile = open(self.reset_file_name)
-        # lcFile1 = open(self.reset_file_name+"1", "w+")
-        # i = 0
-        # for line in lcFile:
-        #     i = i + 1
-        #     # lcText = lcFile.readline()
-        #     if i > 3:
-        #         lcFile1.write(line)
-        # lcFile.close()
-        # lcFile1.close()
-        # # lcFile1 = open(self.reset_file_name + "1")
-        # lnSize = os.path.getsize(self.reset_file_name + "1")
-        # logger.debug("lnSizeof: " + str(lnSize))
+        self.change_mode(2)  # 11H
+        # отправляем первые 3 строки, потом надо дождаться ответа от робота, и послать остальные строки
+        lcText = self.form.textEdit.toPlainText().split('\n')
+        for i in range(3):
+            self.command_to_port_encode(lcText[i]+"\r\n")
+        # self.commands_to_port_encode(self.form.textEdit.toPlainText()+"\r\n")
+        # lcFile = open(self.reset_file_name, "w+")
+        # # self.change_mode(2) # 11H
+        # # self.command_to_port_encode("FILE=OQ\r\n")
+        # lcText = self.form.textEdit.toPlainText().split('\n')
+        # for i in range(len(lcText)):
+        #     if i > 2:
+        #         lcFile.write(lcText[i])
+        # lcFile.close()  # закрыли, чтоб сохранить
 
-        # # lcText1 = lcFile.read()
-        for i in range(2): # отправляем первые 2 строки в порт
-            lcText = lcFile.readline().rstrip("\n")
-            logger.debug("Первые 2 строки: " + str(lcText))
-            self.command_to_port_encode(lcText+ "\r\n")
+        # lnSize = sys.getsizeof(lcText)
+        # logger.debug("!!! " + str(lnSize))
+        # lcText = lcText.split('\n')
+        # for i in range(len(lcText)):
+        #     if i != 2:
+        #         # if i < len(lcText):
+        #         #     lcTmp = "\r\n"
+        #         # else:
+        #         #     lcTmp = ""
+        #         self.command_to_port_encode(lcText[i] + "\r\n")
+        #         logger.debug(str(i) + "-я строка: " + lcText[i])
+        #     else:
+        #         # в 3ю пишем размер в байтах
+        #         self.command_to_port_encode(str(lnSize)+"\r\n")
+        #         logger.debug("3-я строка: " + str(lnSize))
 
-        lcText = lcFile.readline().rstrip("\n")
-        logger.debug("!!!" + lcText + ", " + str(lnSize) + ", " + str(len(str(lnSize))) + ", " + str(len(lcText)))
-        lnSize += len(str(lnSize)) - len(lcText) # + lcText1.count("\n")
-        logger.debug("3я строка: " + str(lnSize))
-        self.command_to_port_encode(str(lnSize) + "\r\n")
-        lcText = lcFile.readlines()
-        logger.debug("4я и дальше строки: " + str(lcText))
-        self.commands_to_port_encode(lcText)
-
+        # lcFile.write(lcText)
+        # lcFile.close() # закрыли, чтоб сохранить
 
 
+        # lcFile = open(self.reset_file_name)
+        # for i in range(2): # отправляем первые 2 строки в порт
+        #     lcText = lcFile.readline().rstrip("\n")
+        #     logger.debug("Первые 2 строки: " + str(lcText))
+        #     self.command_to_port_encode(lcText+ "\r\n")
+        #
+        # lcText = lcFile.readline().rstrip("\n")
+        # logger.debug("!!!" + lcText + ", " + str(lnSize) + ", " + str(len(str(lnSize))) + ", " + str(len(lcText)))
+        # lnSize += len(str(lnSize)) - len(lcText) # + lcText1.count("\n")
+        # logger.debug("3я строка: " + str(lnSize))
+        # self.command_to_port_encode(str(lnSize) + "\r\n")
+        # lcText = lcFile.readlines()
+        # logger.debug("4я и дальше строки: " + str(lcText))
+        # self.commands_to_port_encode(lcText)
+
+    @logger.catch
+    # после ответа робота отправляем с 4й строки все остальное из textEdit
+    def proc_download_end(self):
+        lcText = self.form.textEdit.toPlainText().split('\n')
+        for i in range(3, len(lcText)):
+            self.command_to_port_encode(lcText[i]+"\r\n")
+        # отменяем параметры после записи файла в робота
+        self.mode_download = 0
+        self.mode_reset_read = 0
+        self.len_Reset_Read = 0
+        self.text_Reset_Read = ""
+        self.mode_joint_print = 0
+        self.text_joint_print = ""
+        self.offset_old = [0] * 6 # оффсеты из настроек ини-файла
+        self.calc_offset = [0] * 6 # оффсеты вычисляем
+        logger.debug("Download завершена")
 
 
     @logger.catch
@@ -255,6 +342,7 @@ class robot_form(QMainWindow):
 
     @logger.catch
     def reset_read1(self):
+        # self.form.textEdit.clear
         if self.mode == 2:
             self.mode_reset_read = 1
             self.command_to_port_encode("WR=Q,50\r\n")
@@ -369,17 +457,24 @@ class robot_form(QMainWindow):
             for i in range(len(lblText)):
                 lcTmp = "RX " + str(datetime.now()) + ":\r\n" + lblText[i]
                 self.form.listWidget.addItem(lcTmp)
-                if self.mode in [0, 1, 2, 5] and self.mode_reset_read == 0: # меняем lblMode - режим
+                if self.mode in [0, 1, 2, 5, 6] and self.mode_reset_read == 0: # меняем lblMode - режим
                     self.form.lblMode.setText(lblText[i])
+                    self.form.statusbar.showMessage(lblText[i])
 
                 if self.mode_reset_read > 0:
                     llReset_read = self.reset_read_receive(lblText[i], llReset_read) # обработка результатов нажатия ResetRead
+
+                if lblText[i] == "\\x11" and self.mode_download == 1:
+                    self.proc_download_end()
 
                 self.joint_print_receive(lblText[i]) # после нажатия joint print
 
                 self.button_enabled_receive(lblText[i]) # доступность доп кнопок в зависимости от режима и пришедшего ответа
 
                 logger.info(lcTmp)
+
+            # if self.mode_reset_read == 2:
+            #     self.mode_reset_read = 1 # возвращение в режим Reset Read1, чтоб в textEdit случайно текст снова не писался
 
             # if self.mode != 0:  # доступность доп кнопок в зависимости от режима
             #     self.form.btnJP.setEnabled(False)
@@ -401,12 +496,12 @@ class robot_form(QMainWindow):
                     logger.error("Ошибка после Reset Read1 " + str(e))
                 llReset_read = False
             if lcText == "AM.ST":
-                llReset_read = True
+                llReset_read = True # в следующей строке будет длина текста
         if self.mode_reset_read == 2:  # после нажатия Reset Read2
             if lcText.find("G09 ENC OFFSET") == 0:
                 i = int(lcText[14:15]) - 1
-                self.g09_offset[i] = float(lcText[16:]) # сохраняем оффсеты в массив self.g09_offset
-                logger.info("g09_offset[" + str(i) + "]: " + str(self.g09_offset[i]))
+                self.offset_old[i] = round(float(lcText[16:]),4) # сохраняем оффсеты в массив self.offset_old
+                logger.info("offset_old[" + str(i) + "]: " + str(self.offset_old[i]))
             self.text_Reset_Read += lcText
             self.form.textEdit.append(lcText)
             # self.file_reset_parameter.write(lcText + "\n")
@@ -485,7 +580,7 @@ class robot_form(QMainWindow):
             self.form.listWidget.addItem(self.pack)
 
     @logger.catch
-    # отправляем одну строку  в порт
+    # отправляем одну строку  в порт текстом
     def command_to_port_encode(self, text):
         try:
             self.serial_port.write(text.encode())
@@ -495,7 +590,7 @@ class robot_form(QMainWindow):
             logger.error("error_command_to_port_encode " + str(e))
 
     @logger.catch
-    # отправляем несоклько строк  в порт
+    # отправляем несколько строк  в порт
     def commands_to_port_encode(self, text):
         try:
             for i in range(len(text)):
@@ -543,15 +638,20 @@ class robot_form(QMainWindow):
     @QtCore.pyqtSlot()
     @logger.catch
     def change_mode(self, id):
+        if self.mode_reset_read == 2:
+            self.mode_reset_read = 1
         self.mode = id # последняя нажатая кнопка H
         try:
             self.pack = bytes([self.modes[id]])
             self.write_port(self.pack)
-            # self.serial_port.sendBreak(1000)
             self.pack = "TX " + str(datetime.now()) + ":\r\n" + chr(self.modes[id]).encode('unicode_escape').decode(
                 'ascii')
             self.form.listWidget.addItem(self.pack)
             logger.info(self.pack)
+            if id == 1:
+                self.form.btnDownload.setEnabled(True)
+            else:
+                self.form.btnDownload.setEnabled(False)
 
 
         except Exception as e:
