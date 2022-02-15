@@ -39,6 +39,9 @@
     </item>
     <item>
      <widget class="QTabWidget" name="tabWidget">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="currentIndex">
        <number>0</number>
       </property>
@@ -73,7 +76,7 @@
          <item>
           <widget class="QPushButton" name="btn15H">
            <property name="text">
-            <string>Zero 15H</string>
+            <string>Zero</string>
            </property>
           </widget>
          </item>
@@ -296,6 +299,9 @@
        </widget>
       </widget>
       <widget class="QWidget" name="tab_axis">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <attribute name="title">
         <string>Axis</string>
        </attribute>

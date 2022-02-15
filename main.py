@@ -25,7 +25,7 @@ class robot_form(QMainWindow):
     def __init__(self, parent=None):
         QMainWindow.__init__(self, parent)
 
-        self.modes = (5, 16, 17, 18, 19, 20, 21, 24, 48)
+        self.modes = (5, 16, 17, 18, 19, 20, 24, 48, 21)
         self.mode = ""
         self.pack = ""
         self.set_0_ready = False
@@ -86,18 +86,6 @@ class robot_form(QMainWindow):
         # кнопка Clear
         self.form.actionClear_2.triggered.connect(self.clear_list)
         # кнопка J1-
-        """ try:
-            for i in range(1, 2):
-                lcTmp = "self.form.btnJ" + str(i) + "minus.pressed.connect(lambda: self.j_minus_pressed(\"" + str(i) + "\"))"
-                print(lcTmp)
-                exec(lcTmp)
-                lcTmp = "self.form.btnJ" + str(i) + "minus.released.connect(lambda: self.j_released(\"" + str(i) + "\"))"
-                print(lcTmp)
-                exec(lcTmp)
-        except Exception as e:
-            self.form.listWidget.addItem("error_axis", e)
-            print("error_axis", e)
-        """
         self.form.btnJ1minus.pressed.connect(lambda: self.j_minus_pressed("1"))
         self.form.btnJ1minus.released.connect(lambda: self.j_released("1"))
         # кнопка J1+
@@ -136,7 +124,7 @@ class robot_form(QMainWindow):
 
         # для работы с режимами
         # self.modes = (([5], "<ENQ>"), ([16], "<DLE>"), ([17], "<DC1>"), ([18], "<DC2>"), ([19], "<DC3>"),
-        #              ([20], "<DC4>"), ([21], "<NAK>"), ([24], "<CAN>"), ([48], "0"))
+        #              ([20], "<DC4>"), ([24], "<CAN>"), ([48], "0"), ([21], "<NAK>"))
 
         # режимы:
         # 0 - 05H - Query
@@ -145,11 +133,11 @@ class robot_form(QMainWindow):
         # 3 - 12H - Reset
         # 4 - 13H - Run
         # 5 - 14H - Teach
-        # 6 - 15H - Zero
-        # 7 - 18H - Restart
-        # 8 - 30H - Stop
+        # 6 - 18H - Restart
+        # 7 - 30H - Stop
+        # 8 - 15H - Zero - пока не используется
         # кнопка Stop 30H
-        self.form.btn30H.clicked.connect(lambda: self.change_mode(8))
+        self.form.btn30H.clicked.connect(lambda: self.change_mode(7))
         # кнопка Idle 10H
         self.form.btn10H.clicked.connect(lambda: self.change_mode(1))
         # кнопка Teach 14H
@@ -157,9 +145,9 @@ class robot_form(QMainWindow):
         # кнопка Query 05H
         self.form.btn05H.clicked.connect(lambda: self.change_mode(0))
         # кнопка Restart 18H
-        self.form.btn18H.clicked.connect(lambda: self.change_mode(7))
-        # кнопка Zero 15H
-        self.form.btn15H.clicked.connect(lambda: self.change_mode(6))
+        self.form.btn18H.clicked.connect(lambda: self.change_mode(6))
+        # кнопка Zero
+        self.form.btn15H.clicked.connect(lambda: self.command_to_port_encode("G00 J1=0 J2=0 J3=-90 J4=0 J5=-90 J6=0 \r\n"))
         # кнопка File 11H
         self.form.btn11H.clicked.connect(lambda: self.change_mode(2))
         # кнопка Reset 12H
@@ -269,6 +257,7 @@ class robot_form(QMainWindow):
         lcText = self.form.textEdit.toPlainText().split('\n')
         for i in range(3):
             self.command_to_port_encode(lcText[i]+"\r\n")
+
         # self.commands_to_port_encode(self.form.textEdit.toPlainText()+"\r\n")
         # lcFile = open(self.reset_file_name, "w+")
         # # self.change_mode(2) # 11H
@@ -442,7 +431,7 @@ class robot_form(QMainWindow):
             while self.serial_port.canReadLine():
                 self.pack += self.serial_port.readLine().data().decode()
 
-            if self.mode in [0, 1, 2, 4, 5, 6, 7]:
+            if self.mode in [0, 1, 2, 4, 5, 6]:
                 size = self.serial_port.bytesAvailable()
                 self.pack += self.serial_port.read(size).decode()
 
@@ -455,21 +444,23 @@ class robot_form(QMainWindow):
             lblText = lblText.split("\\r\\n")
             llReset_read = False
             for i in range(len(lblText)):
-                lcTmp = "RX " + str(datetime.now()) + ":\r\n" + lblText[i]
+                lcText = lblText[i]
+                lcTmp = "RX " + str(datetime.now()) + ":\r\n" + lcText
                 self.form.listWidget.addItem(lcTmp)
-                if self.mode in [0, 1, 2, 5, 6] and self.mode_reset_read == 0: # меняем lblMode - режим
-                    self.form.lblMode.setText(lblText[i])
-                    self.form.statusbar.showMessage(lblText[i])
+                # меняем lblMode - режим
+                if self.mode in [0, 1, 2, 5, 6] and self.mode_reset_read == 0 and (lcText=="0" or lcText[0:1]=="\\"):
+                    self.form.lblMode.setText(lcText)
+                    self.form.statusbar.showMessage(lcText)
 
                 if self.mode_reset_read > 0:
                     llReset_read = self.reset_read_receive(lblText[i], llReset_read) # обработка результатов нажатия ResetRead
 
-                if lblText[i] == "\\x11" and self.mode_download == 1:
+                if lcText == "\\x11" and self.mode_download == 1:
                     self.proc_download_end()
 
-                self.joint_print_receive(lblText[i]) # после нажатия joint print
+                self.joint_print_receive(lcText) # после нажатия joint print
 
-                self.button_enabled_receive(lblText[i]) # доступность доп кнопок в зависимости от режима и пришедшего ответа
+                self.button_enabled_receive(lcText) # доступность доп кнопок в зависимости от режима и пришедшего ответа
 
                 logger.info(lcTmp)
 
@@ -515,14 +506,21 @@ class robot_form(QMainWindow):
     def button_enabled_receive(self, lcText):
         if self.mode == 5 and lcText == "\\x14":  # teach
             self.form.btnJP.setEnabled(True)
+            self.form.tab_axis.setEnabled(True)
         if self.mode == 2 and lcText == "\\x11":  # file
             # self.mode_reset_read = 0
             self.form.btnResetRead1.setEnabled(True)
             self.form.btnResetRead2.setEnabled(True)
             self.form.btnDownload.setEnabled(True)
+        if lcText[0:1] == "\\" and self.mode != 5 and self.mode != 2:
+            self.form.tab_axis.setEnabled(False)
+            self.form.btnResetRead1.setEnabled(False)
+            self.form.btnResetRead2.setEnabled(False)
+            self.form.btnDownload.setEnabled(False)
+
 
     def joint_print_receive(self, lcText):
-        if self.mode == 8 and self.mode_joint_print == 1 and lcText != "":
+        if self.mode == 7 and self.mode_joint_print == 1 and lcText != "":
             self.text_joint_print = lcText
             self.mode_joint_print = 0
             logger.debug("self.text_joint_print: " + self.text_joint_print)
@@ -557,7 +555,7 @@ class robot_form(QMainWindow):
     @logger.catch
     def set_zero_1(self):
         # stop
-        self.change_mode(8)
+        self.change_mode(7)
         # exit
         self.change_mode(1)
         # teach
@@ -570,17 +568,22 @@ class robot_form(QMainWindow):
         # # stop
         # self.change_mode(8)
 
+    @logger.catch
+    # отправляем одну строку байтами
     def command_to_port(self, text):
-        if text[0:1] == "#":
-            text_char = int(text[1:4])
-            pack = bytes([text_char])
-            self.serial_port.write(pack)
-            self.pack = "TX " + str(datetime.now()) + ":\r\n" + chr(text_char).encode('unicode_escape').decode(
-                'ascii')
-            self.form.listWidget.addItem(self.pack)
+        try:
+            if text[0:1] == "#":
+                text_char = int(text[1:4])
+                pack = bytes([text_char])
+                self.serial_port.write(pack)
+                self.pack = "TX " + str(datetime.now()) + ":\r\n" + chr(text_char).encode('unicode_escape').decode(
+                    'ascii')
+                self.form.listWidget.addItem(self.pack)
+        except Exception as e:
+            logger.error("error_command_to_port " + str(e))
 
     @logger.catch
-    # отправляем одну строку  в порт текстом
+    # отправляем одну строку в порт текстом
     def command_to_port_encode(self, text):
         try:
             self.serial_port.write(text.encode())
@@ -652,8 +655,6 @@ class robot_form(QMainWindow):
                 self.form.btnDownload.setEnabled(True)
             else:
                 self.form.btnDownload.setEnabled(False)
-
-
         except Exception as e:
             logger.error("error_printable " + str(e))
 
