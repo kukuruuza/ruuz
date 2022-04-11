@@ -13,6 +13,21 @@ from datetime import datetime
 from loguru import logger
 import os.path
 import time
+import sys
+import os
+import sqlite3
+from ctypes import *
+from PyQt5 import uic, QtCore
+import serial
+import serial.tools.list_ports
+import serial.threaded
+import threading
+#from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
+from datetime import datetime
+from loguru import logger
+import os.path
+import time
 
 
 # TODO: проверка ком-порта (не помню)
@@ -20,6 +35,7 @@ import time
 # TODO: режим работы актуальный видно всегда (PRND)
 # TODO: скорость (0-100 и фиксированные значения)
 # TODO: J1-6 отображение положения (мин-макс и "плпавющий" режим)
+# TODO: движение слайдеров хотя бы примерное при движении робота
 
 
 logger.add("main.log", format="{time} {level} {message}", level="DEBUG")
@@ -34,6 +50,16 @@ class robot_form(QMainWindow):
             QMainWindow.__init__(self, parent)
 
             self.modes = (5, 16, 17, 18, 19, 20, 24, 48, 21)
+            # режимы:
+            # 0 - 05H - Query
+            # 1 - 10H - Idle, Exit
+            # 2 - 11H - File
+            # 3 - 12H - Reset
+            # 4 - 13H - Run
+            # 5 - 14H - Teach
+            # 6 - 18H - Restart
+            # 7 - 30H - Stop
+            # 8 - 15H - Zero
             self.mode = ""
             self.pack = ""
             self.set_0_ready = False
@@ -149,16 +175,7 @@ class robot_form(QMainWindow):
             # self.modes = (([5], "<ENQ>"), ([16], "<DLE>"), ([17], "<DC1>"), ([18], "<DC2>"), ([19], "<DC3>"),
             #              ([20], "<DC4>"), ([24], "<CAN>"), ([48], "0"), ([21], "<NAK>"))
 
-            # режимы:
-            # 0 - 05H - Query
-            # 1 - 10H - Idle, Exit
-            # 2 - 11H - File
-            # 3 - 12H - Reset
-            # 4 - 13H - Run
-            # 5 - 14H - Teach
-            # 6 - 18H - Restart
-            # 7 - 30H - Stop
-            # 8 - 15H - Zero - пока не используется
+
             # кнопка Stop 30H
             self.form.btn30H.clicked.connect(lambda: self.change_mode(7))
             # кнопка Idle 10H
@@ -169,8 +186,10 @@ class robot_form(QMainWindow):
             self.form.btn05H.clicked.connect(lambda: self.change_mode(0))
             # кнопка Restart 18H
             self.form.btn18H.clicked.connect(lambda: self.change_mode(6))
+            # кнопка Zero 15H
+            self.form.btn15H.clicked.connect(lambda: self.change_mode(8))
             # кнопка Zero
-            self.form.btn15H.clicked.connect(lambda: self.command_to_port_encode("G00 J1=0 J2=0 J3=-90 J4=0 J5=-90 J6=0 \r\n"))
+            self.form.btnZero.clicked.connect(lambda: self.command_to_port_encode("G00 J1=0 J2=0 J3=-90 J4=0 J5=-90 J6=0 \r\n"))
             # кнопка File 11H
             self.form.btn11H.clicked.connect(lambda: self.change_mode(2))
             # кнопка Reset 12H
@@ -182,6 +201,32 @@ class robot_form(QMainWindow):
             self.form.btnJP.clicked.connect(lambda: self.proc_joint_print())
             # кнопка Reset Read
             self.form.btnResetRead1.clicked.connect(lambda: self.reset_read1())
+
+            # кнопка Speed
+            self.form.btnSpeed.clicked.connect(lambda: self.set_speed())
+
+            # # SpinJ1
+            # self.form.SpinJ1.valueChanged.connect(lambda: self.command_to_port_encode(f"G00 J1={str(self.form.SpinJ1.value())} \r\n"))
+
+            #  Движение с помощью слайдеров на вкладке Axis
+            # SliderJ1
+            self.form.SliderJ1.sliderMoved.connect(lambda: self.sliderJ1_moved())
+            self.form.SliderJ1.sliderReleased.connect(lambda: self.sliderJ1_released())
+            # SliderJ2
+            self.form.SliderJ2.sliderMoved.connect(lambda: self.sliderJ2_moved())
+            self.form.SliderJ2.sliderReleased.connect(lambda: self.sliderJ2_released())
+            # SliderJ3
+            self.form.SliderJ3.sliderMoved.connect(lambda: self.sliderJ3_moved())
+            self.form.SliderJ3.sliderReleased.connect(lambda: self.sliderJ3_released())
+            # SliderJ4
+            self.form.SliderJ4.sliderMoved.connect(lambda: self.sliderJ4_moved())
+            self.form.SliderJ4.sliderReleased.connect(lambda: self.sliderJ4_released())
+            # SliderJ5
+            self.form.SliderJ5.sliderMoved.connect(lambda: self.sliderJ5_moved())
+            self.form.SliderJ5.sliderReleased.connect(lambda: self.sliderJ5_released())
+            # SliderJ6
+            self.form.SliderJ6.sliderMoved.connect(lambda: self.sliderJ6_moved())
+            self.form.SliderJ6.sliderReleased.connect(lambda: self.sliderJ6_released())
 
 
 
@@ -462,6 +507,73 @@ class robot_form(QMainWindow):
             logger.error(f"reset read {str(e)}")
 
 
+    @logger.catch
+    def set_speed(self):
+        lcSpeed = str(self.form.spinSpeed.value())
+        lcText = f"G07 VP={lcSpeed}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.lblSpeed.setText(lcSpeed)
+
+    @logger.catch
+    def sliderJ1_moved(self):
+        self.form.SpinJ1.setValue(self.form.SliderJ1.value())
+
+    @logger.catch
+    def sliderJ1_released(self):
+        lcText = f"G00 J1={str(self.form.SliderJ1.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
+    @logger.catch
+    def sliderJ2_moved(self):
+        self.form.SpinJ2.setValue(self.form.SliderJ2.value())
+
+    @logger.catch
+    def sliderJ2_released(self):
+        lcText = f"G00 J2={str(self.form.SliderJ2.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
+    @logger.catch
+    def sliderJ3_moved(self):
+        self.form.SpinJ3.setValue(self.form.SliderJ3.value())
+
+    @logger.catch
+    def sliderJ3_released(self):
+        lcText = f"G00 J3={str(self.form.SliderJ3.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
+    @logger.catch
+    def sliderJ4_moved(self):
+        self.form.SpinJ4.setValue(self.form.SliderJ4.value())
+
+    @logger.catch
+    def sliderJ4_released(self):
+        lcText = f"G00 J4={str(self.form.SliderJ4.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
+    @logger.catch
+    def sliderJ5_moved(self):
+        self.form.SpinJ5.setValue(self.form.SliderJ5.value())
+
+    @logger.catch
+    def sliderJ5_released(self):
+        lcText = f"G00 J5={str(self.form.SliderJ5.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
+    @logger.catch
+    def sliderJ6_moved(self):
+        self.form.SpinJ6.setValue(self.form.SliderJ6.value())
+
+    @logger.catch
+    def sliderJ6_released(self):
+        lcText = f"G00 J6={str(self.form.SliderJ6.value())}\r\n"
+        self.command_to_port_encode(lcText)
+        self.form.tab_axis.setEnabled(False)
+
     # @logger.catch
     # def reset_read2(self):
     #     if self.mode == 2:
@@ -578,15 +690,16 @@ class robot_form(QMainWindow):
             self.form.tab_axis.setEnabled(True)
             self.form.btn12H.setEnabled(False)
             self.form.btn13H.setEnabled(False)
-            self.form.btn15H.setEnabled(True)
+            self.form.btn15H.setEnabled(False)
             self.form.btn11H.setEnabled(False)
             self.form.btn05H.setEnabled(False)
             self.form.btn18H.setEnabled(False)
             self.form.btn10H.setEnabled(False)
+            self.form.btnZero.setEnabled(True)
         if self.mode == 2 and lcText == "\\x11":  # file 11H
             # self.mode_reset_read = 0
             self.form.btnResetRead1.setEnabled(True)
-            self.form.btnResetRead2.setEnabled(True)
+            # self.form.btnResetRead2.setEnabled(True)
             self.form.btnDownload.setEnabled(True)
             self.form.tab_axis.setEnabled(False)
             self.form.btn12H.setEnabled(False)
@@ -596,11 +709,13 @@ class robot_form(QMainWindow):
             self.form.btn05H.setEnabled(False)
             self.form.btn18H.setEnabled(False)
             self.form.btn10H.setEnabled(False)
+            self.form.btnZero.setEnabled(False)
         if lcText[0:1] == "\\" and self.mode != 5 and self.mode != 2:
             self.form.tab_axis.setEnabled(False)
             self.form.btnResetRead1.setEnabled(False)
-            self.form.btnResetRead2.setEnabled(False)
+            # self.form.btnResetRead2.setEnabled(False)
             self.form.btnDownload.setEnabled(False)
+            self.form.btnZero.setEnabled(False)
         if lcText == "\\x10":  #idle 10H
             self.form.btn12H.setEnabled(True)
             self.form.btn13H.setEnabled(True)
@@ -609,6 +724,7 @@ class robot_form(QMainWindow):
             self.form.btn05H.setEnabled(True)
             self.form.btn18H.setEnabled(True)
             self.form.btn14H.setEnabled(True)
+            self.form.btnZero.setEnabled(False)
         if lcText == "0":  # 0
             self.form.tab_axis.setEnabled(False)
             self.form.btn12H.setEnabled(False)
@@ -619,6 +735,7 @@ class robot_form(QMainWindow):
             self.form.btn05H.setEnabled(False)
             self.form.btn18H.setEnabled(False)
             self.form.btn10H.setEnabled(True)
+            self.form.btnZero.setEnabled(False)
 
 
     @QtCore.pyqtSlot()
@@ -833,9 +950,13 @@ class robot_form(QMainWindow):
         try:
             while 1:
                 if self.serial_port.inWaiting() > 0:
+                    self.pack = ""
                     self.pack = self.serial_port.read(self.serial_port.inWaiting()).decode()
                     logger.debug("pack_receive_port:")
                     logger.info(self.pack)
+
+                    if self.mode == 5 and self.pack == "%": # режим 14Н, пришел ответ от робота, что выполнение команды окончено
+                        self.form.tab_axis.setEnabled(True)
 
                     if self.pack.isprintable:
                         lblText = self.pack.encode('unicode_escape').decode('ascii')
