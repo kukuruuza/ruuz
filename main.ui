@@ -2,14 +2,11 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
-  <property name="enabled">
-   <bool>false</bool>
-  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1080</width>
+    <width>1294</width>
     <height>654</height>
    </rect>
   </property>
@@ -43,10 +40,10 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_modes">
        <attribute name="title">
@@ -83,22 +80,22 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="btn15H">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>Zero 15H</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="btnZero">
            <property name="enabled">
             <bool>false</bool>
            </property>
            <property name="text">
             <string>Zero</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btn15H">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="text">
-            <string>Run 15H</string>
            </property>
           </widget>
          </item>
@@ -245,7 +242,7 @@
        </widget>
        <widget class="QPushButton" name="btnCalcOffset">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="geometry">
          <rect>
@@ -334,41 +331,60 @@
          <string>0</string>
         </property>
        </widget>
-       <widget class="QWidget" name="">
+       <widget class="QPushButton" name="btnSpeed">
+        <property name="geometry">
+         <rect>
+          <x>191</x>
+          <y>379</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Speed</string>
+        </property>
+       </widget>
+       <widget class="QSpinBox" name="spinSpeed">
         <property name="geometry">
          <rect>
           <x>140</x>
           <y>380</y>
-          <width>179</width>
-          <height>25</height>
+          <width>45</width>
+          <height>20</height>
          </rect>
         </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
-         <item>
-          <widget class="QSpinBox" name="spinSpeed">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="maximum">
-            <number>100</number>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnSpeed">
-           <property name="text">
-            <string>Speed</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="lblSpeed">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="value">
+         <number>5</number>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btnSetZero">
+        <property name="geometry">
+         <rect>
+          <x>230</x>
+          <y>40</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Set 0</string>
+        </property>
+       </widget>
+       <widget class="QListWidget" name="listWidget_JP">
+        <property name="geometry">
+         <rect>
+          <x>230</x>
+          <y>70</y>
+          <width>181</width>
+          <height>81</height>
+         </rect>
+        </property>
        </widget>
       </widget>
       <widget class="QWidget" name="tab_axis">
@@ -455,6 +471,12 @@
          </item>
          <item row="0" column="2">
           <widget class="QDoubleSpinBox" name="SpinJ2">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
            <property name="decimals">
             <number>4</number>
            </property>
@@ -507,6 +529,12 @@
          </item>
          <item row="0" column="2">
           <widget class="QDoubleSpinBox" name="SpinJ3">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
            <property name="decimals">
             <number>4</number>
            </property>
@@ -559,6 +587,12 @@
          </item>
          <item row="0" column="2">
           <widget class="QDoubleSpinBox" name="SpinJ4">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
            <property name="decimals">
             <number>4</number>
            </property>
@@ -611,6 +645,12 @@
          </item>
          <item row="0" column="2">
           <widget class="QDoubleSpinBox" name="SpinJ5">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
            <property name="decimals">
             <number>4</number>
            </property>
@@ -663,6 +703,12 @@
          </item>
          <item row="0" column="2">
           <widget class="QDoubleSpinBox" name="SpinJ6">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
            <property name="decimals">
             <number>4</number>
            </property>
@@ -889,6 +935,32 @@
          <string>CFG-file:</string>
         </property>
        </widget>
+       <widget class="QPushButton" name="btn_Close1">
+        <property name="geometry">
+         <rect>
+          <x>70</x>
+          <y>400</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Close_dll</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="btn_Open1">
+        <property name="geometry">
+         <rect>
+          <x>70</x>
+          <y>360</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Open_dll</string>
+        </property>
+       </widget>
       </widget>
      </widget>
     </item>
@@ -899,7 +971,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1080</width>
+     <width>1294</width>
      <height>21</height>
     </rect>
    </property>
@@ -914,7 +986,7 @@
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QToolBar" name="toolBar">
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="windowTitle">
     <string>toolBar</string>

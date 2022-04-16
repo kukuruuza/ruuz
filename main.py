@@ -13,21 +13,6 @@ from datetime import datetime
 from loguru import logger
 import os.path
 import time
-import sys
-import os
-import sqlite3
-from ctypes import *
-from PyQt5 import uic, QtCore
-import serial
-import serial.tools.list_ports
-import serial.threaded
-import threading
-#from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
-from datetime import datetime
-from loguru import logger
-import os.path
-import time
 
 
 # TODO: проверка ком-порта (не помню)
@@ -128,10 +113,7 @@ class robot_form(QMainWindow):
             # кнопка Сохранить
             self.form.btnSave.clicked.connect(lambda: self.save_port())
             # # кнопка Set 0
-            # try:
-            #     self.form.btnSetZero.clicked.connect(lambda: self.set_zero())
-            # except Exception as e:
-            #     logger.error("error_set_0 " + str(e))
+            self.form.btnSetZero.clicked.connect(lambda: self.set_zero_daemon())
             # кнопка Clear
             self.form.actionClear_2.triggered.connect(self.clear_list)
             # кнопка J1-
@@ -175,7 +157,6 @@ class robot_form(QMainWindow):
             # self.modes = (([5], "<ENQ>"), ([16], "<DLE>"), ([17], "<DC1>"), ([18], "<DC2>"), ([19], "<DC3>"),
             #              ([20], "<DC4>"), ([24], "<CAN>"), ([48], "0"), ([21], "<NAK>"))
 
-
             # кнопка Stop 30H
             self.form.btn30H.clicked.connect(lambda: self.change_mode(7))
             # кнопка Idle 10H
@@ -200,7 +181,7 @@ class robot_form(QMainWindow):
             # кнопка Joint Print
             self.form.btnJP.clicked.connect(lambda: self.proc_joint_print())
             # кнопка Reset Read
-            self.form.btnResetRead1.clicked.connect(lambda: self.reset_read1())
+            self.form.btnResetRead1.clicked.connect(lambda: self.reset_read_daemon())
 
             # кнопка Speed
             self.form.btnSpeed.clicked.connect(lambda: self.set_speed())
@@ -467,27 +448,59 @@ class robot_form(QMainWindow):
         self.calc_offset = [0] * 6 # оффсеты вычисляем
         logger.debug("Download завершена")
 
+
     @logger.catch
-    def reset_read(self):
-        self.reset_read_thread = threading.Thread(target=self.reset_read1)
+    def set_zero_daemon(self):
+        self.set_zero_thread = threading.Thread(target=self.set_zero)
+        self.set_zero_thread.daemon = True
+        self.set_zero_thread.start()
+
+    @logger.catch
+    def set_zero(self):
+        try:
+            self.change_mode(7) # stop
+            time.sleep(0.5)
+            self.change_mode(1) # exit
+            time.sleep(0.5)
+            self.change_mode(5) # teach
+            time.sleep(0.5)
+            self.proc_joint_print()
+            time.sleep(0.5)
+            self.change_mode(7) # stop
+            time.sleep(0.5)
+            self.change_mode(1) # exit
+            time.sleep(0.5)
+            self.change_mode(2) # file
+            time.sleep(0.5)
+            self.reset_read()
+        except Exception as e:
+            logger.error(f"set zero {str(e)}")
+
+
+
+    @logger.catch
+    def reset_read_daemon(self):
+        self.reset_read_thread = threading.Thread(target=self.reset_read)
         self.reset_read_thread.daemon = True
         self.reset_read_thread.start()
 
     @logger.catch
-    def reset_read1(self):
+    def reset_read(self):
         try:
             if self.mode == 2:
                 self.command_to_port_encode("WR=Q,50\r\n")
                 time.sleep(0.5)
                 pack = self.pack.split("\r\n")
+                # logger.info(pack)
                 lnReset_Read = int(pack[1]) # во 2й строке ответа робота должно вернуться нужное число
-                # logger.info(f"lnReset_Read = {pack[1]}")
-                if lnReset_Read > 0: #
-                    self.form.textEdit.clear()
+                logger.info(f"lnReset_Read = {pack[1]}")
+                if lnReset_Read > 0:
+                    # self.form.textEdit.clear()
                     self.form.textEdit.append("FILE=OQ")
                     pack = "WR=Q," + str(lnReset_Read+13) + "\r\n"
                     self.command_to_port_encode(pack)
                     time.sleep(1)
+                    logger.debug(self.pack)
                     pack = self.pack.split("\r\n")
                     for i in range(len(pack)):
                         lcText = pack[i]
@@ -499,12 +512,16 @@ class robot_form(QMainWindow):
                         # self.text_Reset_Read += lcText
                         self.form.textEdit.append(lcText)
                     self.form.btnCalcOffset.setEnabled(True)
+                    return True
                 else:
                     logger.error(f"ResetRead после команды WR=Q,50 вернул неверный ответ: {lcText}")
+                    return False
             else:
                 logger.error("ResetRead можно выполнить только в режиме 11H")
+                return False
         except Exception as e:
             logger.error(f"reset read {str(e)}")
+            return False
 
 
     @logger.catch
@@ -574,6 +591,7 @@ class robot_form(QMainWindow):
         self.command_to_port_encode(lcText)
         self.form.tab_axis.setEnabled(False)
 
+
     # @logger.catch
     # def reset_read2(self):
     #     if self.mode == 2:
@@ -632,9 +650,9 @@ class robot_form(QMainWindow):
                 self.form.btnOpenClose.setText("CLOSE")
                 self.change_mode(0)
 
-                self.input_thread = threading.Thread(target=self.receive)
-                self.input_thread.daemon = True
-                self.input_thread.start()
+                self.receive_thread = threading.Thread(target=self.receive)
+                self.receive_thread.daemon = True
+                self.receive_thread.start()
 
         except Exception as e:
             logger.error(f"error_open_close_serial_port {str(e)}")
@@ -742,44 +760,6 @@ class robot_form(QMainWindow):
     @logger.catch
     def write_port(self, pack):
         self.serial_port.write(pack)
-
-
-    # @QtCore.pyqtSlot()
-    # @logger.catch
-    # def set_zero(self):
-    #     try:
-    #         self.cur.execute("SELECT * FROM commands_spec WHERE id_header = 1 ORDER BY spec_num")
-    #         self.settings_result = self.cur.fetchall()
-    #         for command in self.settings_result:
-    #             self.command_to_port(command[3])
-    #             # logger.info(command[3])
-    #         # self.set_0_ready = True
-    #         # # stop
-    #         # self.change_mode(8)
-    #         # # exit
-    #         # self.change_mode(1)
-    #         # # reset
-    #         # self.change_mode(3)
-    #     except Exception as e:
-    #         logger.error("error_set0 " + str(e))
-
-
-    # @QtCore.pyqtSlot()
-    # @logger.catch
-    # def set_zero_1(self):
-    #     # stop
-    #     self.change_mode(7)
-    #     # exit
-    #     self.change_mode(1)
-    #     # teach
-    #     self.change_mode(5)
-    #     # # joint print
-    #     # pack = "G07 GCM=0\r\n"
-    #     # self.serial_port.write(pack.encode())
-    #     # pack = "TX " + str(datetime.now()) + ":\r\n" + pack
-    #     # self.form.listWidget.addItem(pack)
-    #     # # stop
-    #     # self.change_mode(8)
 
     @logger.catch
     # отправляем одну строку байтами
@@ -924,11 +904,13 @@ class robot_form(QMainWindow):
 
     @logger.catch
     def joint_print_parsing(self, lcText):
+        self.form.listWidget_JP.clear()
         y = lcText.split(" ")
         for i in range(6):
             lcTmp = y[i].strip('\\').strip('n').strip('\\').strip('r')
             logger.debug(f"self.text_joint_print_parsing: {lcTmp}")
             self.offset_jointprint[i] = float(y[i].split("=")[1])
+            self.form.listWidget_JP.addItem(lcTmp)
         self.form.SpinJ1.setValue(self.offset_jointprint[0])
         self.form.SpinJ2.setValue(self.offset_jointprint[1])
         self.form.SpinJ3.setValue(self.offset_jointprint[2])
@@ -974,6 +956,7 @@ class robot_form(QMainWindow):
                         if self.mode in [0, 1, 2, 5, 6] and (lcText=="0" or lcText[0:1]=="\\"):
                             self.form.lblMode.setText(lcText)
                             self.form.statusbar.showMessage(lcText)
+                            self.button_enabled_receive(lcText)  # доступность доп кнопок в зависимости от режима и пришедшего ответа
 
                         # if self.mode_reset_read > 0:
                         #     llReset_read = self.reset_read_receive(lblText[i], llReset_read) # обработка результатов нажатия ResetRead
@@ -990,7 +973,7 @@ class robot_form(QMainWindow):
 
                         self.joint_print_receive(lcText) # после нажатия joint print
 
-                        self.button_enabled_receive(lcText) # доступность доп кнопок в зависимости от режима и пришедшего ответа
+
 
                         logger.info(lcTmp)
                 else:
