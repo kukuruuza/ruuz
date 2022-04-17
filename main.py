@@ -50,7 +50,8 @@ class robot_form(QMainWindow):
             self.set_0_ready = False
             # self.mode_reset_read = 0
             # self.lnReset_Read = 0
-            # self.text_Reset_Read = ""
+            self.pcReset_Read = ""
+            self.plReset_Read = False
             self.mode_joint_print = 0
             self.text_joint_print = ""
             self.offset_jointprint = [0] * 6  # оффсеты из координат
@@ -339,22 +340,21 @@ class robot_form(QMainWindow):
                     max = 0
                 logger.debug("max: " + str(max))
                 self.calc_offset[i] = round(max - self.offset_jointprint[i] + self.offset_old[i], 4)
-                self.form.listWidget_offsets.addItem("OFFSET" + str(i+1) + " = " + str(self.calc_offset[i]))
+                self.form.listWidget_offsets.addItem(f"OFFSET {str(i+1)}  = {str(self.calc_offset[i])}")
 
 
     @logger.catch
     def proc_prepare(self):
         lcFile = open(self.reset_file_name, "w+")
-        lcFile.write(self.form.textEdit.toPlainText())
+        lcFile.write(self.form.lstWidget_Edition.toPlainText())
         lcFile.close()  # закрыли, чтоб сохранить
 
 
 
-
     @logger.catch
-    # для работы, когда нет подключения к роботу - из textEdit готовим массив self.calc_offset
+    # для работы, когда нет подключения к роботу - из lstWidget_Edition готовим массив self.calc_offset
     def read_offsets(self):
-        lcText = self.form.textEdit.toPlainText().split('\n')
+        lcText = self.form.lstWidget_Edition.toPlainText().split('\n')
         for i in range(len(lcText)):
             lcTmp = lcText[i]
             if lcTmp.find("G09 ENC OFFSET") == 0:
@@ -363,9 +363,9 @@ class robot_form(QMainWindow):
                 logger.info("offset_old[" + str(j) + "]: " + str(self.offset_old[j]))
 
     @logger.catch
-    # вычисление размера в байтах содержимого TextEdit
+    # вычисление размера в байтах содержимого lstWidget_Edition
     def calc_size(self, lcFileName):
-        lcText = self.form.textEdit.toPlainText().split('\n')
+        lcText = self.form.lstWidget_Edition.toPlainText().split('\n')
         lcFile = open(lcFileName, "w+")
         for i in range(len(lcText)):
             if i < len(lcText)-1:
@@ -379,12 +379,33 @@ class robot_form(QMainWindow):
 
     @logger.catch
     def proc_download(self):
-        self.mode_download = 1
+        self.change_mode(7) # stop
+        time.sleep(0.5)
+        self.change_mode(1) # exit 10H
+        time.sleep(0.5)
+        self.change_mode(2)  # File 11H
+        time.sleep(0.5)
+        # отправляем первые 2 строки + размер, потом надо дождаться ответа от робота, и послать остальные строки
+        # lcTextEdit = self.form.lstWidget_Edition.toPlainText().split('\n')
         self.change_mode(2)  # 11H
-        # отправляем первые 3 строки, потом надо дождаться ответа от робота, и послать остальные строки
-        lcText = self.form.textEdit.toPlainText().split('\n')
         for i in range(3):
-            self.command_to_port_encode(lcText[i]+"\r\n")
+            lcText = self.form.lstWidget_Edition.item(i).text()
+            self.command_to_port_encode(f"{lcText}\r\n")
+            logger.info(lcText)
+        time.sleep(0.5)
+        if self.pack == chr(17): # пришел ответ от робота <DC1>, можем продолжать отправку команд
+            lnLen = self.form.lstWidget_Edition.count()
+            for i in range(3, lnLen):
+                self.command_to_port_encode(self.form.lstWidget_Edition.item(i).text() + "\r\n")
+            self.change_mode(7) # stop
+            time.sleep(0.5)
+            self.change_mode(1) # exit
+            time.sleep(0.5)
+            self.change_mode(3)
+            time.sleep(1.5)
+            logger.info("Процедура download завершена успешно")
+
+
 
         # self.commands_to_port_encode(self.form.textEdit.toPlainText()+"\r\n")
         # lcFile = open(self.reset_file_name, "w+")
@@ -432,9 +453,9 @@ class robot_form(QMainWindow):
         # self.commands_to_port_encode(lcText)
 
     @logger.catch
-    # после ответа робота отправляем с 4й строки все остальное из textEdit
+    # после ответа робота отправляем с 4й строки все остальное из lstWidget_Edition
     def proc_download_end(self):
-        lcText = self.form.textEdit.toPlainText().split('\n')
+        lcText = self.form.lstWidget_Edition.toPlainText().split('\n')
         for i in range(3, len(lcText)):
             self.command_to_port_encode(lcText[i]+"\r\n")
         # отменяем параметры после записи файла в робота
@@ -468,13 +489,64 @@ class robot_form(QMainWindow):
             time.sleep(0.5)
             self.change_mode(7) # stop
             time.sleep(0.5)
-            self.change_mode(1) # exit
+            logger.debug(self.pack)
+            self.joint_print_parsing(self.pack) # парсим JP координаты
+            self.change_mode(7) # stop
             time.sleep(0.5)
-            self.change_mode(2) # file
+            self.change_mode(1) # exit 10H
             time.sleep(0.5)
-            self.reset_read()
+            self.change_mode(2) # file 11H
+            time.sleep(0.5)
+            llCheck = self.reset_read_set_zero()
+            if llCheck == False:
+                logger.error("При выполнении Set Zero после Reset Read возникла ошибка. Выполнение Set Zero прекращено")
+                return
+            # self.change_mode(7) # stop
+            # time.sleep(0.5)
+            # self.change_mode(1) # exit 10H
+            # time.sleep(0.5)
+            # self.change_mode(2)  # File 11H
+            # time.sleep(0.5)
+            # отправляем первые 2 строки + размер, потом надо дождаться ответа от робота, и послать остальные строки
+            # lcTextEdit = self.form.lstWidget_Edition.toPlainText().split('\n')
+            # self.change_mode(2)  # 11H
+            # for i in range(2):
+            #     lcText = self.form.lstWidget_Edition.item(i).text()
+            #     self.command_to_port_encode(f"{lcText}\r\n")
+                # logger.info(lcText)
+            # for i in range(2):
+            #     self.command_to_port_encode(lcText[i] + "\r\n")
+            # в 3ю строку вычисляем размер
+            lcFileName = "tmp.txt"
+            lcFile = open(lcFileName, "w+")
+            lnLen = self.form.lstWidget_Edition.count()
+            for i in range(3, lnLen):
+                lcText = self.form.lstWidget_Edition.item(i).text()
+                logger.info(f"set zero. Пишем lstWidgetEdition в файл: {lcText}")
+                if i < lnLen - 1:
+                    lcFile.write(f"{lcText}\n")
+                else:
+                    lcFile.write(lcText)
+            lcFile.close()  # закрыли, чтоб сохранить
+            lcSize = str(os.stat(lcFileName).st_size)
+            # self.command_to_port_encode(lcSize+ "\r\n")
+            logger.info(f"lcSize={lcSize}")
+            self.form.lstWidget_Edition.item(2).setText(lcSize)
+            # time.sleep(0.5)
+            # if self.pack == chr(17): # пришел ответ от робота <DC1>, можем продолжать отправку команд
+            #     for i in range(3, lnLen):
+            #         self.command_to_port_encode(self.form.lstWidget_Edition.item(i).text() + "\r\n")
+            #     self.change_mode(7) # stop
+            #     time.sleep(0.5)
+            #     self.change_mode(1) # exit
+            #     time.sleep(0.5)
+            #     self.change_mode(3)
+            #     time.sleep(1.5)
+            logger.info("Подготовка Set Zero завершена успешно. Нажмите Download")
+            # else:
+            #     logger.error("Процедура Set Zero. При Download не пришел ответ от робота")
         except Exception as e:
-            logger.error(f"set zero {str(e)}")
+            logger.error(f"Процедура Set Zero завершена с ошибкой {str(e)}")
 
 
 
@@ -495,8 +567,8 @@ class robot_form(QMainWindow):
                 lnReset_Read = int(pack[1]) # во 2й строке ответа робота должно вернуться нужное число
                 logger.info(f"lnReset_Read = {pack[1]}")
                 if lnReset_Read > 0:
-                    # self.form.textEdit.clear()
-                    self.form.textEdit.append("FILE=OQ")
+                    self.form.lstWidget_Edition.clear()
+                    self.form.lstWidget_Edition.addItem("FILE=OQ")
                     pack = "WR=Q," + str(lnReset_Read+13) + "\r\n"
                     self.command_to_port_encode(pack)
                     time.sleep(1)
@@ -510,9 +582,66 @@ class robot_form(QMainWindow):
                             self.offset_old[i] = round(float(lcText[16:]), 4) # сохраняем оффсеты в массив self.offset_old
                             logger.info("offset_old[" + str(i) + "]: " + str(self.offset_old[i]))
                         # self.text_Reset_Read += lcText
-                        self.form.textEdit.append(lcText)
+                        self.form.lstWidget_Edition.addItem(lcText)
                     self.form.btnCalcOffset.setEnabled(True)
-                    return True
+                else:
+                    logger.error(f"ResetRead после команды WR=Q,50 вернул неверный ответ: {lcText}")
+            else:
+                logger.error("ResetRead можно выполнить только в режиме 11H")
+        except Exception as e:
+            logger.error(f"reset read {str(e)}")
+
+
+    @logger.catch
+    def reset_read_set_zero(self):
+        try:
+            if self.mode == 2:
+                self.command_to_port_encode("WR=Q,50\r\n")
+                self.plReset_Read = True
+                time.sleep(0.5)
+                pack = self.pcReset_Read.split("\r\n")
+                self.plReset_Read = False
+                logger.info(pack)
+                lnReset_Read = int(pack[1]) # во 2й строке ответа робота должно вернуться нужное число
+                logger.info(f"lnReset_Read = {pack[1]}")
+                if lnReset_Read > 0:
+                    llCheck = 0
+                    while llCheck < 3: # пробуем получить ответ от робота 3 раза
+                        pack = "WR=Q," + str(lnReset_Read+13) + "\r\n"
+                        self.command_to_port_encode(pack)
+                        time.sleep(0.7)
+                        pack = self.pack.split("\r\n")
+                        logger.debug(f"reset_read_set_zero pack: {pack}")
+                        if pack[0] == "AM.ST":
+                            self.form.lstWidget_Edition.clear()
+                            self.form.lstWidget_Edition.addItem("FILE=OQ")
+                            for i in range(len(pack)):
+                                lcText = pack[i]
+                                # logger.info(lcText)
+                                if lcText.find("G09 ENC OFFSET") == 0: #tckb пришла строка с оффсетами, подменяем их на нужные
+                                    i = int(lcText[14:15]) - 1
+                                    self.offset_old[i] = round(float(lcText[16:]), 4) # сохраняем оффсеты в массив self.offset_old
+                                    logger.info(f"offset_old[{str(i)}]:{str(self.offset_old[i])}")
+                                    if i == 2 or i == 4:
+                                        max = -90
+                                    else:
+                                        max = 0
+                                    self.calc_offset[i] = round(max - self.offset_jointprint[i] + self.offset_old[i], 4)
+                                    lcTmp = str(self.calc_offset[i])
+                                    logger.info(f"calc_offset[{str(i)}]:{lcTmp}")
+                                    lcText = lcText[:16] + lcTmp
+                                # self.text_Reset_Read += lcText
+                                self.form.lstWidget_Edition.addItem(lcText)
+                            llCheck = 3
+                        else:
+                            logger.debug("reset_read_set_zero. После 2й команды WR=Q,.. ответ робота не успели отловить, будет сделан повтор WR=Q,")
+                            llCheck += 1
+                    if llCheck == 3:
+                        self.form.btnCalcOffset.setEnabled(True)
+                        return True
+                    else:
+                        logger.error(f"ResetRead после команды WR=Q,... вернул неверный ответ: {lcText}")
+                        return False
                 else:
                     logger.error(f"ResetRead после команды WR=Q,50 вернул неверный ответ: {lcText}")
                     return False
@@ -520,9 +649,8 @@ class robot_form(QMainWindow):
                 logger.error("ResetRead можно выполнить только в режиме 11H")
                 return False
         except Exception as e:
-            logger.error(f"reset read {str(e)}")
+            logger.error(f"Ошибка в reset_read_set_zero: {str(e)}")
             return False
-
 
     @logger.catch
     def set_speed(self):
@@ -769,9 +897,9 @@ class robot_form(QMainWindow):
                 text_char = int(text[1:4])
                 pack = bytes([text_char])
                 self.serial_port.write(pack)
-                self.pack = "TX " + str(datetime.now()) + ":\r\n" + chr(text_char).encode('unicode_escape').decode(
+                lcText = "TX " + str(datetime.now()) + ":\r\n" + chr(text_char).encode('unicode_escape').decode(
                     'ascii')
-                self.form.listWidget.addItem(self.pack)
+                self.form.listWidget.addItem(lcText)
         except Exception as e:
             logger.error("error_command_to_port " + str(e))
 
@@ -780,8 +908,9 @@ class robot_form(QMainWindow):
     def command_to_port_encode(self, text):
         try:
             self.serial_port.write(text.encode())
-            self.pack = "TX " + str(datetime.now()) + ":\r\n" + text
-            self.form.listWidget.addItem(self.pack)
+            lcText = "TX " + str(datetime.now()) + ":\r\n" + text
+            logger.info(lcText)
+            self.form.listWidget.addItem(lcText)
         except Exception as e:
             logger.error("error_command_to_port_encode " + str(e))
 
@@ -842,19 +971,19 @@ class robot_form(QMainWindow):
             #     self.mode_reset_read = 1
             self.mode = id  # последняя нажатая кнопка H
 
-            self.pack = bytes([self.modes[id]])
-            self.write_port(self.pack)
-            self.pack = "TX---->>> " + str(datetime.now()) + ":\r\n" + chr(self.modes[id]).encode('unicode_escape').decode(
+            lcText= bytes([self.modes[id]])
+            self.write_port(lcText)
+            lcText = "TX---->>> " + str(datetime.now()) + ":\r\n" + chr(self.modes[id]).encode('unicode_escape').decode(
                 'ascii')
-            self.form.listWidget.addItem(self.pack)
-            logger.info(self.pack)
+            self.form.listWidget.addItem(lcText)
+            logger.info(lcText)
             if id == 1:  # если нажали 10H
                 self.button_enabled_receive("\\x10")
 
             if id == 7:  # если нажали 0, становится доступной кнопка 10H
                 self.button_enabled_receive("0")
         except Exception as e:
-            logger.error("error_printable " + str(e))
+            logger.error(f"Ошибка в change_mode: {str(e)}")
 
     # Выбор ини-файла
     @logger.catch
@@ -897,9 +1026,9 @@ class robot_form(QMainWindow):
             logger.error("JointPrint можно выполнить только в режиме 14H")
 
     @logger.catch
-    # для работы, когда нет подключения к роботу - считываем строку self.text_joint_print из textEdit
+    # для работы, когда нет подключения к роботу - считываем строку self.text_joint_print из lstWidget_Edition
     def read_JP(self):
-        self.text_joint_print = self.form.textEdit.toPlainText()
+        self.text_joint_print = self.form.lstWidget_Edition.toPlainText()
         logger.debug("self.text_joint_print = " + self.text_joint_print)
 
     @logger.catch
@@ -934,8 +1063,13 @@ class robot_form(QMainWindow):
                 if self.serial_port.inWaiting() > 0:
                     self.pack = ""
                     self.pack = self.serial_port.read(self.serial_port.inWaiting()).decode()
-                    logger.debug("pack_receive_port:")
-                    logger.info(self.pack)
+                    logger.debug(f"receive self.pack:{self.pack}")
+
+                    if self.plReset_Read == True:
+                        self.pcReset_Read += self.pack
+                        logger.debug(f"receive self.pcReset_Read:{self.pcReset_Read}")
+                    else:
+                        self.pcReset_Read = ""
 
                     if self.mode == 5 and self.pack == "%": # режим 14Н, пришел ответ от робота, что выполнение команды окончено
                         self.form.tab_axis.setEnabled(True)
@@ -964,18 +1098,17 @@ class robot_form(QMainWindow):
                         if lcText == "\\x11" and self.mode_download == 1:
                             self.proc_download_end()
 
-                        # если вернулась строка с координатами, парсим ее
-                        if lcText.find("J1=")!=-1 and lcText.find("J2=")!=-1 and lcText.find("J3=")!=-1 and lcText.find("J4=")!=-1 and lcText.find("J5=")!=-1 and lcText.find("J6=")!=-1:
-                            if lcText.startswith("G"):
-                                self.joint_print_parsing(lcText[4:])
-                            else:
-                                self.joint_print_parsing(lcText)
+                        # # если вернулась строка с координатами, парсим ее
+                        # if lcText.find("J1=")!=-1 and lcText.find("J2=")!=-1 and lcText.find("J3=")!=-1 and lcText.find("J4=")!=-1 and lcText.find("J5=")!=-1 and lcText.find("J6=")!=-1:
+                        #     if lcText.startswith("G"):
+                        #         self.joint_print_parsing(lcText[4:])
+                        #     else:
+                        #         self.joint_print_parsing(lcText)
 
                         self.joint_print_receive(lcText) # после нажатия joint print
 
-
-
                         logger.info(lcTmp)
+                    # time.sleep(0.5)
                 else:
                     time.sleep(0.3)
         except Exception as e:

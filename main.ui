@@ -35,7 +35,7 @@
      </widget>
     </item>
     <item>
-     <widget class="QTextEdit" name="textEdit"/>
+     <widget class="QListWidget" name="lstWidget_Edition"/>
     </item>
     <item>
      <widget class="QTabWidget" name="tabWidget">
